@@ -15,7 +15,7 @@ export default function Reader() {
   const id = params.get('id')
   const { getDocument, updateDocument } = useLibrary()
   const { addPracticeSeconds } = useStreak()
-  const { chunkSize, breakOnPunctuation } = useChunkSize()
+  const { chunkSize, setChunkSize, breakOnPunctuation } = useChunkSize()
   const { defaultWpm } = useWpm()
 
   const doc = useMemo(() => getDocument(id), [getDocument, id])
@@ -25,10 +25,12 @@ export default function Reader() {
   const [playing, setPlaying] = useState(false)
   const [wpm, setWpm] = useState(doc?.wpm || defaultWpm)
   const [showJump, setShowJump] = useState(false)
+  const [showQuickEdit, setShowQuickEdit] = useState(false)
 
   const timerRef = useRef(null)
   const indexRef = useRef(index)
   const secondsRef = useRef(doc?.secondsRead || 0)
+  const playStartRef = useRef(null)
   indexRef.current = index
 
   const persist = useCallback(
@@ -39,13 +41,16 @@ export default function Reader() {
     [doc, updateDocument],
   )
 
-  // Accumulate real practice time (wall-clock while playing) toward the daily goal.
+  // Accumulate real practice time eagerly: record start when playing, commit when paused/stopped.
   useEffect(() => {
-    if (!playing) return
-    const start = Date.now()
-    return () => {
-      const secs = (Date.now() - start) / 1000
-      if (secs >= 0.5) addPracticeSeconds(secs)
+    if (playing) {
+      playStartRef.current = Date.now()
+    } else {
+      if (playStartRef.current !== null) {
+        const secs = (Date.now() - playStartRef.current) / 1000
+        if (secs >= 0.5) addPracticeSeconds(secs)
+        playStartRef.current = null
+      }
     }
   }, [playing, addPracticeSeconds])
 
@@ -82,9 +87,14 @@ export default function Reader() {
     }
   }, [index, words.length, doc, persist, wpm])
 
-  // Save on unmount
+  // Save on unmount — commit any in-flight practice time first.
   useEffect(() => {
     return () => {
+      if (playStartRef.current !== null) {
+        const secs = (Date.now() - playStartRef.current) / 1000
+        if (secs >= 0.5) addPracticeSeconds(secs)
+        playStartRef.current = null
+      }
       if (!doc) return
       updateDocument(doc.id, {
         wordIndex: Math.min(indexRef.current, words.length),
@@ -128,6 +138,21 @@ export default function Reader() {
           ? 'text-[30px] leading-[38px]'
           : 'font-reader-chunk-mobile text-reader-chunk-mobile'
 
+  const commitAndSave = useCallback(() => {
+    if (playStartRef.current !== null) {
+      const secs = (Date.now() - playStartRef.current) / 1000
+      if (secs >= 0.5) addPracticeSeconds(secs)
+      playStartRef.current = null
+    }
+    if (doc) {
+      updateDocument(doc.id, {
+        wordIndex: Math.min(indexRef.current, words.length),
+        wpm,
+        secondsRead: Math.round(secondsRef.current),
+      })
+    }
+  }, [addPracticeSeconds, doc, updateDocument, words.length, wpm])
+
   const reset = () => {
     setPlaying(false)
     setIndex(0)
@@ -145,11 +170,23 @@ export default function Reader() {
 
   return (
     <div className="fixed inset-0 max-w-max-width mx-auto flex flex-col bg-background overflow-hidden">
-      <TopAppBar title={doc.title} showBack onBack={() => navigate('/home')} />
+      <TopAppBar title={doc.title} showBack onBack={() => { setPlaying(false); commitAndSave(); navigate('/home') }} />
 
       <main className="flex-grow min-h-0 flex flex-col pt-16 pb-0 px-padding-screen">
-        {/* Jump to page */}
-        <div className="flex justify-end pt-3">
+        {/* Jump to page + Quick edit */}
+        <div className="flex justify-between items-center pt-3">
+          <button
+            onClick={() => {
+              setPlaying(false)
+              setShowQuickEdit(true)
+            }}
+            aria-label="Quick settings"
+            title="Quick settings"
+            className="flex items-center gap-1.5 h-9 px-3 rounded-full bg-bg-secondary border border-border text-text-secondary hover:text-primary hover:border-primary/40 active:scale-95 transition-all"
+          >
+            <Icon name="tune" className="text-[18px]" />
+            <span className="font-caption text-caption">Settings</span>
+          </button>
           <button
             onClick={() => {
               setPlaying(false)
@@ -258,7 +295,7 @@ export default function Reader() {
             <Icon name={playing ? 'pause' : 'play_arrow'} className="text-[40px]" fill />
           </button>
           <button
-            onClick={() => navigate('/home')}
+            onClick={() => { setPlaying(false); commitAndSave(); navigate('/home') }}
             className="w-14 h-14 rounded-full bg-bg-secondary border border-border flex items-center justify-center text-text-secondary active:scale-95"
           >
             <Icon name="done" />
@@ -274,6 +311,101 @@ export default function Reader() {
           onClose={() => setShowJump(false)}
         />
       )}
+
+      {showQuickEdit && (
+        <QuickEditSheet
+          wpm={wpm}
+          setWpm={setWpm}
+          chunkSize={chunkSize}
+          setChunkSize={setChunkSize}
+          onClose={() => setShowQuickEdit(false)}
+        />
+      )}
     </div>
+  )
+}
+
+const WPM_PRESETS = [200, 300, 400, 500, 600]
+const CHUNK_LABELS = ['1 word', '2 words', '3 words', '4 words']
+
+function QuickEditSheet({ wpm, setWpm, chunkSize, setChunkSize, onClose }) {
+  return (
+    <>
+      <div
+        className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div
+        role="dialog"
+        aria-label="Quick reading settings"
+        className="fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full max-w-max-width bg-bg-secondary rounded-t-2xl px-padding-screen pt-5 pb-10 shadow-2xl"
+      >
+        <div className="w-10 h-1 rounded-full bg-border mx-auto mb-6" />
+
+        <p className="font-h2 text-h2 text-text-heading mb-5">Quick settings</p>
+
+        {/* WPM */}
+        <p className="font-caption text-caption text-text-secondary uppercase tracking-wider mb-2">Speed</p>
+        <div className="flex items-center gap-3 mb-3">
+          <button
+            onClick={() => setWpm((w) => Math.max(100, w - 50))}
+            className="w-10 h-10 rounded-full bg-bg-tertiary border border-border flex items-center justify-center text-primary active:scale-95"
+          >
+            <Icon name="remove" />
+          </button>
+          <div className="flex-1 text-center">
+            <span className="font-h1 text-h1 text-text-heading tabular-nums">{wpm}</span>
+            <span className="font-caption text-caption text-text-secondary ml-1">WPM</span>
+          </div>
+          <button
+            onClick={() => setWpm((w) => Math.min(900, w + 50))}
+            className="w-10 h-10 rounded-full bg-bg-tertiary border border-border flex items-center justify-center text-primary active:scale-95"
+          >
+            <Icon name="add" />
+          </button>
+        </div>
+        <div className="flex gap-2 flex-wrap mb-6">
+          {WPM_PRESETS.map((n) => (
+            <button
+              key={n}
+              onClick={() => setWpm(n)}
+              className={`px-3 py-1.5 rounded-full font-caption text-caption border transition-colors ${
+                wpm === n
+                  ? 'bg-primary text-on-primary border-primary'
+                  : 'bg-bg-tertiary text-text-secondary border-border'
+              }`}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+
+        {/* Chunk size */}
+        <p className="font-caption text-caption text-text-secondary uppercase tracking-wider mb-2">Words per flash</p>
+        <div className="flex gap-2 flex-wrap mb-6">
+          {CHUNK_LABELS.map((label, i) => (
+            <button
+              key={i}
+              onClick={() => setChunkSize(i + 1)}
+              className={`px-3 py-1.5 rounded-full font-caption text-caption border transition-colors ${
+                chunkSize === i + 1
+                  ? 'bg-primary text-on-primary border-primary'
+                  : 'bg-bg-tertiary text-text-secondary border-border'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <button
+          onClick={onClose}
+          className="w-full h-12 bg-primary text-on-primary rounded-xl font-button text-button uppercase tracking-widest active:scale-[0.98] transition-transform"
+        >
+          Done
+        </button>
+      </div>
+    </>
   )
 }

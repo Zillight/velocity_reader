@@ -9,7 +9,7 @@ export default function Home() {
   const { docs } = useLibrary()
   const stats = getStats(docs)
 
-  const resume = docs.find((d) => !d.completed && d.wordIndex > 0)
+  const resume = docs.find((d) => !d.completed)
   const progress = resume ? Math.round((resume.wordIndex / resume.wordCount) * 100) : 0
 
   return (
@@ -36,7 +36,7 @@ export default function Home() {
               <div className="flex justify-between items-start">
                 <div className="flex flex-col">
                   <span className="font-caption text-caption text-text-secondary uppercase tracking-wider mb-1">
-                    Resume Reading
+                    {progress > 0 ? 'Resume Reading' : 'Start Reading'}
                   </span>
                   <h3 className="font-h2 text-h2 text-text-heading leading-tight truncate max-w-[200px]">
                     {resume.title}
@@ -51,7 +51,7 @@ export default function Home() {
               </div>
               <div className="flex items-center justify-end mt-1">
                 <span className="bg-primary text-on-primary-container px-6 py-2 rounded-full font-button text-button uppercase">
-                  Continue
+                  {progress > 0 ? 'Continue' : 'Begin'}
                 </span>
               </div>
             </div>

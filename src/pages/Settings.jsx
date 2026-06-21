@@ -7,11 +7,14 @@ import { useTheme } from '../hooks/useTheme.js'
 import { useStreak } from '../hooks/useStreak.js'
 import { useChunkSize, MIN_CHUNK, MAX_CHUNK } from '../hooks/useChunkSize.js'
 import { useWpm, MIN_WPM, MAX_WPM } from '../hooks/useWpm.js'
+import { usePurposeCountdown, MIN_COUNTDOWN, MAX_COUNTDOWN } from '../hooks/usePurposeCountdown.js'
 
 const GOAL_PRESETS = [1, 5, 10, 15, 20, 30]
 const CHUNK_PRESETS = [1, 2, 3, 4]
 const WPM_PRESETS = [250, 350, 450, 600]
+const COUNTDOWN_PRESETS = [10, 15, 30, 60]
 const WPM_STEP = 50
+const COUNTDOWN_STEP = 5
 
 export default function Settings() {
   const { docs, removeDocument } = useLibrary()
@@ -19,6 +22,7 @@ export default function Settings() {
   const { goalMinutes, setGoalMinutes } = useStreak()
   const { chunkSize, setChunkSize, breakOnPunctuation, setBreakOnPunctuation } = useChunkSize()
   const { defaultWpm, setDefaultWpm } = useWpm()
+  const { countdownSeconds, setCountdownSeconds } = usePurposeCountdown()
   const [cleared, setCleared] = useState(false)
   const isDark = theme === 'dark'
 
@@ -106,6 +110,54 @@ export default function Settings() {
                   }`}
                 >
                   {m} min
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-bg-secondary border border-border rounded-xl p-4">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-3">
+                <Icon name="hourglass_top" className="text-secondary" />
+                <span className="font-body text-body text-text-primary">Purpose countdown</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  aria-label="Decrease countdown"
+                  onClick={() => setCountdownSeconds(countdownSeconds - COUNTDOWN_STEP)}
+                  disabled={countdownSeconds <= MIN_COUNTDOWN}
+                  className="w-8 h-8 rounded-full bg-bg-tertiary border border-border flex items-center justify-center text-primary active:scale-95 disabled:opacity-30"
+                >
+                  <Icon name="remove" className="text-[18px]" />
+                </button>
+                <span className="font-h2 text-h2 text-text-heading w-14 text-center">
+                  {countdownSeconds}s
+                </span>
+                <button
+                  aria-label="Increase countdown"
+                  onClick={() => setCountdownSeconds(countdownSeconds + COUNTDOWN_STEP)}
+                  disabled={countdownSeconds >= MAX_COUNTDOWN}
+                  className="w-8 h-8 rounded-full bg-bg-tertiary border border-border flex items-center justify-center text-primary active:scale-95 disabled:opacity-30"
+                >
+                  <Icon name="add" className="text-[18px]" />
+                </button>
+              </div>
+            </div>
+            <p className="font-caption text-caption text-text-secondary mb-3">
+              Seconds to reflect on your reading purpose before it auto-starts.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {COUNTDOWN_PRESETS.map((n) => (
+                <button
+                  key={n}
+                  onClick={() => setCountdownSeconds(n)}
+                  className={`px-3 py-1.5 rounded-full font-caption text-caption border transition-colors ${
+                    countdownSeconds === n
+                      ? 'bg-primary text-on-primary border-primary'
+                      : 'bg-bg-tertiary text-text-secondary border-border hover:text-primary'
+                  }`}
+                >
+                  {n}s
                 </button>
               ))}
             </div>

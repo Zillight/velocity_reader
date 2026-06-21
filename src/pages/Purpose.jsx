@@ -4,9 +4,9 @@ import TopAppBar from '../components/TopAppBar.jsx'
 import Icon from '../components/Icon.jsx'
 import { useLibrary } from '../hooks/useLibrary.js'
 import { useWpm } from '../hooks/useWpm.js'
+import { usePurposeCountdown } from '../hooks/usePurposeCountdown.js'
 
 const MAX = 150
-const COUNTDOWN_SECONDS = 30 // seconds
 const RING_RADIUS = 70
 
 function formatTime(total) {
@@ -19,8 +19,9 @@ export default function Purpose() {
   const navigate = useNavigate()
   const { addDocument } = useLibrary()
   const { defaultWpm } = useWpm()
+  const { countdownSeconds } = usePurposeCountdown()
   const [purpose, setPurpose] = useState('')
-  const [secondsLeft, setSecondsLeft] = useState(COUNTDOWN_SECONDS)
+  const [secondsLeft, setSecondsLeft] = useState(countdownSeconds)
   const [typingMode, setTypingMode] = useState(false)
   const startedRef = useRef(false)
 
@@ -54,7 +55,7 @@ export default function Purpose() {
   }, [secondsLeft, typingMode, start])
 
   const circumference = 2 * Math.PI * RING_RADIUS
-  const dashOffset = circumference * (1 - secondsLeft / COUNTDOWN_SECONDS)
+  const dashOffset = circumference * (1 - secondsLeft / countdownSeconds)
 
   return (
     <div className="h-dvh flex flex-col items-center bg-background overflow-hidden">
